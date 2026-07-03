@@ -12,27 +12,12 @@
 
 
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>buddhameetpunk</title>
-  <meta name="description" content="The personal website of buddhameetpunk, a graphic designer based in Tokyo." />
-
-<meta property="og:title" content="buddhameetpunk" />
-<meta property="og:description" content="The personal website of buddhameetpunk, a graphic designer based in Tokyo." />
-<meta property="og:type" content="website" />
-<meta property="og:image" content="og-image.png" />
-
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="buddhameetpunk" />
-<meta name="twitter:description" content="The personal website of buddhameetpunk, a graphic designer based in Tokyo." />
-<meta name="twitter:image" content="og-image.png" />
-
-<link rel="icon" type="image/png" href="favicon.png" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 
   <style>
 
@@ -2354,7 +2339,86 @@
 
     body.is-compact-index .compact-playground-note .compact-experience-note {
       white-space: normal;
-      font-size: clamp(24px, 7vw, 32px);
+      font-size: inherit;
+      line-height: inherit;
+    }
+
+    /* =========================
+       COMPACT / LOCK HORIZONTAL DRIFT
+       Mobile should read as a fixed vertical page: no left-right scrolling.
+    ========================= */
+
+    html,
+    body {
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    body.is-compact-index {
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden;
+      overscroll-behavior-x: none;
+    }
+
+    body.is-compact-index .page,
+    body.is-compact-index .main,
+    body.is-compact-index .info-wrap,
+    body.is-compact-index .door-panel,
+    body.is-compact-index .works-list-panel,
+    body.is-compact-index .info-panel,
+    body.is-compact-index .work-detail {
+      width: 100%;
+      max-width: 100vw;
+      min-width: 0;
+      overflow-x: hidden;
+    }
+
+    body.is-compact-index .works-list-row,
+    body.is-compact-index .works-list-date,
+    body.is-compact-index .works-list-title,
+    body.is-compact-index .works-list-category,
+    body.is-compact-index .work-title-wrap,
+    body.is-compact-index .work-title-stroke,
+    body.is-compact-index .work-title-fill,
+    body.is-compact-index .work-meta,
+    body.is-compact-index .work-meta-row,
+    body.is-compact-index .work-meta-label,
+    body.is-compact-index .work-meta-value,
+    body.is-compact-index .compact-playground-note,
+    body.is-compact-index .compact-info-line,
+    body.is-compact-index .copy-target {
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    body.is-compact-index .work-meta-row {
+      grid-template-columns: minmax(0, 34%) minmax(0, 66%);
+    }
+
+    body.is-compact-index img,
+    body.is-compact-index video,
+    body.is-compact-index canvas {
+      max-width: 100%;
+    }
+
+    /* Calendar keeps its interaction, but the phone page still continues
+       downward into project information and images. */
+    body.is-compact-index .calendar-stage {
+      height: min(118vw, 560px);
+    }
+
+    body.is-compact-index.is-compact-work-open .calendar-work-view .work-title-wrap {
+      display: block !important;
+      margin-top: 28px;
+    }
+
+    body.is-compact-index .calendar-work-view .work-meta,
+    body.is-compact-index .calendar-after-meta-images {
+      display: block;
+      position: relative;
+      z-index: 20;
     }
 
     .compact-index-top {
@@ -4659,7 +4723,7 @@ rotateX = clamp(
           style="--work-color: ${data.workColor || "#ffffff"}; --work-outline: ${data.workOutlineColor || "#111111"};"
         >
           <div class="calendar-control-row">
-            <div class="calendar-control-hint">Drag to move. Pull the bottom edge to turn.<br>Two-finger click and drag to rotate.</div>
+            <div class="calendar-control-hint">Drag to move. Pull the bottom edge to turn.<br>Use two fingers to rotate.</div>
             <div class="calendar-control-tools">
               <div class="calendar-reset">RESET</div>
               <div class="calendar-trash" aria-label="trash">
@@ -4787,6 +4851,7 @@ rotateX = clamp(
       let interaction = null;
       let highestZ = pages.length + 20;
       let selectedTarget = { type: "stack", page: null };
+      const touchPointers = new Map();
 
       const stackState = {
         x: 0,
@@ -5039,6 +5104,7 @@ rotateX = clamp(
         });
 
         highestZ = pages.length + 20;
+        touchPointers.clear();
         surface.classList.remove("is-rotating");
         clearPassedLight();
         trashBin.classList.remove("is-ready");
@@ -5213,10 +5279,106 @@ rotateX = clamp(
         updatePassedLight(peelMode, amount);
       }
 
-      function startRotation(event, target) {
-        const initialRotation = target.type === "page"
+      function currentRotationOfTarget(target) {
+        return target.type === "page"
           ? target.page._calendarState.rotation
           : stackState.rotation;
+      }
+
+      function rememberTouchPointer(event) {
+        if (event.pointerType !== "touch") {
+          return;
+        }
+
+        touchPointers.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY
+        });
+      }
+
+      function forgetTouchPointer(event) {
+        if (event.pointerType !== "touch") {
+          return;
+        }
+
+        touchPointers.delete(event.pointerId);
+      }
+
+      function getTwoFingerGeometry() {
+        const points = Array.from(touchPointers.values());
+
+        if (points.length < 2) {
+          return null;
+        }
+
+        const a = points[0];
+        const b = points[1];
+
+        return {
+          angle: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI,
+          x: (a.x + b.x) / 2,
+          y: (a.y + b.y) / 2
+        };
+      }
+
+      function showRotateIndicatorAt(x, y) {
+        if (!rotateIndicator) {
+          return;
+        }
+
+        const rect = surface.getBoundingClientRect();
+        rotateIndicator.style.left = `${x - rect.left}px`;
+        rotateIndicator.style.top = `${y - rect.top}px`;
+      }
+
+      function startTwoFingerRotation(target) {
+        const geometry = getTwoFingerGeometry();
+
+        if (!geometry) {
+          return false;
+        }
+
+        if (interaction && interaction.type === "peel" && interaction.page) {
+          interaction.page.classList.remove("is-peeling");
+          refreshAccessiblePages();
+        }
+
+        interaction = {
+          type: "touch-rotate",
+          target,
+          startAngle: geometry.angle,
+          rotation: currentRotationOfTarget(target)
+        };
+
+        surface.classList.add("is-rotating");
+        showRotateIndicatorAt(geometry.x, geometry.y);
+        return true;
+      }
+
+      function prepareTouchGesture(event, target) {
+        if (event.pointerType !== "touch") {
+          return false;
+        }
+
+        event.stopPropagation();
+        event.preventDefault();
+        rememberTouchPointer(event);
+
+        try {
+          surface.setPointerCapture(event.pointerId);
+        } catch (error) {
+          /* Some touch browsers may already have reassigned capture. */
+        }
+
+        if (touchPointers.size >= 2) {
+          return startTwoFingerRotation(target);
+        }
+
+        return false;
+      }
+
+      function startRotation(event, target) {
+        const initialRotation = currentRotationOfTarget(target);
 
         interaction = {
           type: "rotate",
@@ -5227,12 +5389,7 @@ rotateX = clamp(
         };
 
         surface.classList.add("is-rotating");
-
-        if (rotateIndicator) {
-          const rect = surface.getBoundingClientRect();
-          rotateIndicator.style.left = `${event.clientX - rect.left}px`;
-          rotateIndicator.style.top = `${event.clientY - rect.top}px`;
-        }
+        showRotateIndicatorAt(event.clientX, event.clientY);
       }
 
       pages.forEach((page) => {
@@ -5269,6 +5426,13 @@ rotateX = clamp(
 
           const state = page._calendarState;
           const handle = event.target.closest(".calendar-peel-handle");
+          const touchTarget = state.detached
+            ? { type: "page", page }
+            : { type: "stack", page: null };
+
+          if (prepareTouchGesture(event, touchTarget)) {
+            return;
+          }
 
           surface.setPointerCapture(event.pointerId);
 
@@ -5303,6 +5467,15 @@ rotateX = clamp(
       });
 
       surface.addEventListener("pointerdown", (event) => {
+        const target = selectedTarget.type === "page" && selectedTarget.page
+          ? selectedTarget
+          : { type: "stack", page: null };
+
+        if (event.pointerType === "touch" && event.target === surface) {
+          prepareTouchGesture(event, target);
+          return;
+        }
+
         const isRotateGesture = event.button === 2 || (event.ctrlKey && event.button === 0);
 
         if (event.target !== surface || !isRotateGesture) {
@@ -5312,15 +5485,34 @@ rotateX = clamp(
         event.preventDefault();
         surface.setPointerCapture(event.pointerId);
 
-        const target = selectedTarget.type === "page" && selectedTarget.page
-          ? selectedTarget
-          : { type: "stack", page: null };
-
         startRotation(event, target);
       });
 
       surface.addEventListener("pointermove", (event) => {
-        if (!interaction || interaction.pointerId !== event.pointerId) {
+        if (event.pointerType === "touch") {
+          rememberTouchPointer(event);
+        }
+
+        if (!interaction) {
+          return;
+        }
+
+        if (interaction.type === "touch-rotate") {
+          const geometry = getTwoFingerGeometry();
+
+          if (!geometry) {
+            return;
+          }
+
+          rotateTarget(
+            interaction.target,
+            interaction.rotation + geometry.angle - interaction.startAngle
+          );
+          showRotateIndicatorAt(geometry.x, geometry.y);
+          return;
+        }
+
+        if (interaction.pointerId !== event.pointerId) {
           return;
         }
 
@@ -5393,6 +5585,18 @@ rotateX = clamp(
       }
 
       function endInteraction(event) {
+        if (event.pointerType === "touch") {
+          forgetTouchPointer(event);
+
+          if (interaction && interaction.type === "touch-rotate") {
+            if (touchPointers.size < 2) {
+              surface.classList.remove("is-rotating");
+              interaction = null;
+            }
+            return;
+          }
+        }
+
         if (!interaction || interaction.pointerId !== event.pointerId) {
           return;
         }
